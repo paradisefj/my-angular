@@ -1,0 +1,15 @@
+{
+  "name": "my-own-angularjs",
+  "description": "",
+  "main": "",
+  "authors": [
+    "fangjuan <fangjuanyuyue@gmail.com>"
+  ],
+  "license": "MIT",
+  "moduleType": [],
+  "homepage": "",
+  "dependencies": {
+    "lodash": "^4.6.1",
+    "jquery": "^2.2.1"
+  }
+}
