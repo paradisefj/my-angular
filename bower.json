@@ -10,6 +10,7 @@
   "homepage": "",
   "dependencies": {
     "lodash": "^4.6.1",
-    "jquery": "^2.2.1"
+    "jquery": "^2.2.1",
+    "sinon": "~1.17.3"
   }
 }

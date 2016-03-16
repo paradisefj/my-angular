@@ -22,12 +22,12 @@ module.exports = function(grunt) {
             unit: {
                 options: {
                     framework: 'jasmine2',
-                    launch_in_dev: ['PhantomJS'],
+                    // launch_in_dev: ['PhantomJS'],
                     before_tests: 'grunt jshint',
                     serve_files: [
                         'bower_components/lodash/lodash.js',
                         'bower_components/jquery/dist/jquery.js',
-                        'node_modules/sinon/pkg/sinon.js',
+                        'bower_components/sinon/lib/sinon.js',
                         'src/**/*.js',
                         'test/**/*.js'
                     ],
