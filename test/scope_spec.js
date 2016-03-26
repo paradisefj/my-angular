@@ -13,10 +13,10 @@ describe("Scope", function(){
 		scope = new Scope();
 		
 		beforeEach(function(){
-			scop = new Scope();
+			scope = new Scope();
 		});
 
-		it("calls the listener function of a watch on first $digest", function(){
+		it("calls the listener function of a watch on first $digest", function(){//在第一次调用$digest时调用listener函数
 			var watchFn = function(){
 				return 'wat';
 			};
@@ -29,7 +29,7 @@ describe("Scope", function(){
 
 		});
 
-		it("calls the watch function with the scope as the argument", function(){
+		it("calls the watch function with the scope as the argument", function(){//调用watch函数应该讲scope作为参数
 			var watchFn = jasmine.createSpy();
 			var listenerFn = function(){};
 			scope.$watch(watchFn, listenerFn);
@@ -39,7 +39,7 @@ describe("Scope", function(){
 			expect(watchFn).toHaveBeenCalledWith(scope);
 		});
 
-		it("calls the listener function when the watched value changes", function(){
+		it("calls the listener function when the watched value changes", function(){//当watch值发生变化的时候应该调用listener
 			scope.someValue = 'a';
 			scope.counter = 0;
 
@@ -87,6 +87,64 @@ describe("Scope", function(){
 
 			scope.$digest();
 			expect(oldValueGiven).toBe(123);
+		});
+
+		it("may have watchers that omit the listener function", function(){//watch函数省略listener函数
+			var watchFn = jasmine.createSpy().and.returnValue('something');
+			scope.$watch(watchFn);
+
+			scope.$digest();
+
+			expect(watchFn).toHaveBeenCalled();
+
+		});
+
+		it("triggers chained watchers in the same digest", function(){
+			scope.name = 'Jane';
+
+			scope.$watch(
+				function (scope){ return scope.nameUpper; },
+				function(newValue, oldValue, scope){
+					if(newValue){
+						scope.initial = newValue.substring(0, 1) + ".";
+					}
+				});
+
+			scope.$watch(
+				function(scope) { return scope.name; },
+				function(newValue, oldValue, scope){
+					if(newValue){
+						scope.nameUpper = newValue.toUpperCase();
+					}
+				});
+
+			scope.$digest();
+			expect(scope.initial).toBe('J.');
+
+			scope.name = 'Bob';
+			scope.$digest();
+			expect(scope.initial).toBe('B.');
+		});
+
+		it("gives up on the watchers after 10 iterations", function(){
+			scope.counterA = 0;
+			scope.counterB = 0;
+
+			scope.$watch(
+				function(scope) { return scope.counterA; },
+				function(newValue, oldValue, scope){
+					scope.counterB ++;
+					console.log(scope.counterB);
+				});
+			scope.$watch(
+				function(scope) { return scope.counterB; },
+				function(newValue, oldValue, scope){
+					scope.counterA ++;
+					console.log(scope.counterA);
+				});
+
+			expect(function() { scope.$digest(); }).toThrow();
+
 		});
 	});
 });
