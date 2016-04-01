@@ -78,7 +78,7 @@ Scope.prototype.$eval = function(expr, locals){
 
 Scope.prototype.$apply = function(expr){
 	try{
-		this.$beginPhase("$phase");
+		this.$beginPhase("$apply");
 		return this.$eval(expr);
 	}finally{
 		this.$clearPhase();
