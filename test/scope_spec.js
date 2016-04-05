@@ -379,5 +379,579 @@ describe("Scope", function(){
 			}, 50);
 			
 		});
+
+		it("allows async $apply with $applyAsync", function(done){
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope){
+					return scope.aValue;
+				}, 
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+
+			scope.$applyAsync(function(scope){
+				scope.aValue = 'abc';
+			});
+
+			expect(scope.counter).toBe(1);
+
+			setTimeout(function() {
+				expect(scope.counter).toBe(2);
+				done();
+			}, 50);
+		});
+
+		it("never executes $applyAsync'ed function in the same cycle", function(done){
+			scope.aValue = [1, 2, 3];
+			scope.asyncApplied = false;
+
+			scope.$watch(
+				function(scope) {
+					return scope.aValue;
+				},
+				function(newValue, oldValue, scope){
+					scope.$applyAsync(function(scope){
+						scope.asyncApplied = true;
+					});
+				}
+			);
+
+			scope.$digest();
+			expect(scope.asyncApplied).toBe(false);
+
+			setTimeout(function(){
+				expect(scope.asyncApplied).toBe(true);
+				done();
+			}, 50);
+		});
+
+		it("coalesces many calls to $applyAsync", function(done){
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) { 
+					scope.counter ++;
+					return scope.aValue; 
+				},
+				function(newValue, oldValue, scope){}
+			);
+
+			scope.$applyAsync(function(scope){
+				scope.aValue = 'abc';
+			});
+
+			scope.$applyAsync(function(scope){
+				scope.aValue = 'def';
+			});
+
+			setTimeout(function() {
+				expect(scope.counter).toBe(2);
+				done();
+			}, 50);
+
+		});
+
+		it('cancels and flushed $applyAsync if digested first', function(done){
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) {
+					scope.counter ++;
+					return scope.aValue;
+				},
+				function(newValue, oldValue, scope) {}
+			);
+
+			scope.$applyAsync(function(scope){
+				scope.aValue = 'abc';
+			});
+
+			scope.$applyAsync(function(scope){
+				scope.aValue = 'def';
+			});
+
+			scope.$digest();
+			expect(scope.counter).toBe(2);
+			expect(scope.aValue).toEqual('def');
+
+			setTimeout(function(){
+				expect(scope.counter).toBe(2);
+				done();
+			}, 50);
+		});
+
+		it('runs a $$postDigest function after each digest', function(){
+			scope.counter = 0;
+
+			scope.$$postDigest(function(){
+				scope.counter++;
+			});
+
+			expect(scope.counter).toBe(0);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+		});
+
+		it("doest not include $$postDigest in the digest", function(){
+			scope.aValue = 'original value';
+
+			scope.$$postDigest(function() {
+				scope.aValue = 'changed value';
+			});
+
+			scope.$watch(
+				function(scope){
+					return scope.aValue;
+				},
+				function(newValue, oldValue, scope){
+					scope.watchedValue = newValue;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.watchedValue).toBe("original value");
+
+			scope.$digest();
+			expect(scope.watchedValue).toBe("changed value");
+		});
+
+		it("cathes exceptions in watch functions and continues", function(){
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) { throw "error"; },
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				}
+			);
+
+			scope.$watch(
+				function(scope) { return scope.aValue;},
+				function(newValue, oldValue, scope) {
+					scope.counter ++;
+				} 
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+		});
+
+		it("catches exceptions in listener functions and continues", function(){
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) { return scope.aValue;},
+				function(newValue, oldValue, scope){
+					throw "Error";
+				}
+			);
+
+			scope.$watch(
+				function(scope) { return scope.aValue; },
+				function(newValue, oldValue, scope) {
+					scope.counter ++;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+		});
+
+		it("catches exceptions in $evalAsync", function(done){
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) { return scope.aValue; },
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				}
+			);
+
+			scope.$evalAsync(function(scope){
+				throw "Error";
+			});
+
+			setTimeout(function(){
+				expect(scope.counter).toBe(1);
+				done();
+			}, 50);
+		});
+
+		it("catches exceptions in $applyAsync", function(done) {
+			scope.$applyAsync(function(scope) {
+				throw "Error";
+			});
+			scope.$applyAsync(function(scope){
+				throw "Error";
+			});
+			scope.$applyAsync(function(scope){
+				scope.applied = true;
+			});
+
+			setTimeout(function(){
+				expect(scope.applied).toBe(true);
+				done();
+			}, 50);
+
+		});
+
+		it("catches exceptions in $$postDigest", function() {
+			var didRun = false;
+
+			scope.$$postDigest(function() {
+				throw "Error";
+			});
+			scope.$$postDigest(function() {
+				didRun = true;
+			});
+
+			scope.$digest();
+			expect(didRun).toBe(true);
+		});
+
+		it("allows destroying a $watch with a removal function", function(){
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			var destroyWatch = scope.$watch(
+				function(scope) { return scope.aValue; },
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+
+			scope.aValue = 'def';
+			scope.$digest();
+			expect(scope.counter).toBe(2);
+
+			scope.aValue = 'ghi';
+			destroyWatch();
+			scope.$digest();
+			expect(scope.counter).toBe(2);
+
+		});
+
+		it("allows destroying a $watch during digest", function(){
+			scope.aValue = 'abc';
+
+			var watchCalls = [];
+
+			scope.$watch(
+				function(scope) {
+					watchCalls.push("first");
+					return scope.aValue;
+				}
+			);
+
+			var destroyWatch = scope.$watch(
+				function(scope) {
+					watchCalls.push('second');
+					destroyWatch();
+				}
+			);
+
+			scope.$watch(
+				function(scope) {
+					watchCalls.push('third');
+					return scope.aValue;
+				}
+			);
+
+			scope.$digest();
+			expect(watchCalls).toEqual(['first', 'second', 'third', 'first', 'third']);
+		});
+
+		it("allows a $watch to destroy another during digest", function() {
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			scope.$watch(
+				function(scope) {
+					return scope.aValue;
+				},
+				function(newValue, oldValue, scope) {
+					destroyWatch();
+				}
+			);
+
+			var destroyWatch = scope.$watch(
+				function(scope) {},
+				function(newValue, oldValue, scope) {}
+			);
+
+			scope.$watch(
+				function(scope) { return scope.aValue; },
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(1);
+		});
+
+		it("allows destroying several $watches during digest", function(){
+			scope.aValue = 'abc';
+			scope.counter = 0;
+
+			var destroyWatch1 = scope.$watch(
+				function(scope){
+					destroyWatch1();
+					destroyWatch2();
+				});
+
+			var destroyWatch2 = scope.$watch(
+				function(scope){ return scope.aValue; },
+				function(newValue, oldValue, scope){
+					scope.counter++;
+				}
+			);
+
+			scope.$digest();
+			expect(scope.counter).toBe(0);
+		});
+
 	});
+
+	describe('$watchGroup', function(){
+		var scope;
+		beforeEach(function(){
+			scope = new Scope();
+		});
+
+		it('takes watches as an array and calls listener with arrays', function(){
+			var gotNewvalues, gotOldValues;
+
+			scope.aValue = 1;
+			scope.anotherValue = 2;
+
+			scope.$watchGroup([
+				function(scope) { return scope.aValue;},
+				function(scope) { return scope.anotherValue; }
+			], function(newValue, oldValue, scope){
+				gotNewvalues = newValue;
+				gotOldValues = oldValue;
+			});
+			scope.$digest();
+
+			expect(gotNewvalues).toEqual([1, 2]);
+			expect(gotOldValues).toEqual([1, 2]);
+
+		});
+
+		it("only calls listener once per digest", function(){
+			var counter = 0;
+
+			scope.aValue = 1;
+			scope.anotherValue = 2;
+
+			scope.$watchGroup([
+				function(scope) { return scope.aValue;}, 
+				function(scope) { return scope.anotherValue;}
+			], function(newValues, oldValues, scope){
+				counter++;
+			});
+
+			scope.$digest();
+			expect(counter).toBe(1);
+		});
+
+		it('uses the same array of old and new values on first run', function(){
+			var gotNewvalues, gotOldValues;
+
+			scope.aValue = 1;
+			scope.anotherValue = 2;
+
+			scope.$watchGroup([
+				function(scope) { return scope.aValue; },
+				function(scope) { return scope.anotherValue}
+			], function(newValues, oldValues, scope) {
+				gotNewvalues = newValues;
+				gotOldValues = oldValues;
+			});
+
+			scope.$digest();
+			expect(gotNewvalues).toBe(gotOldValues);
+		});
+
+		it("uses different arrasy for old and new values on subsequent runs", function(){
+			var gotNewValues, gotOldValues;
+
+			scope.aValue = 1;
+			scope.anotherValue = 2;
+
+			scope.$watchGroup([
+				function(scope) { return scope.aValue; },
+				function(scope) { return scope.anotherValue; }
+			], function(newValues, oldValues, scope){
+				gotNewvalues = newValues;
+				gotOldValues = oldValues;
+			});
+
+			scope.$digest();
+
+			scope.anotherValue = 3;
+			scope.$digest();
+
+			expect(gotNewvalues).toEqual([1, 3]);
+			expect(gotOldValues).toEqual([1, 2]);
+		});
+
+		it('can be deregistered', function() {
+			var counter = 0;
+
+			scope.aValue = 1;
+			scope.anotherValue = 2;
+
+			var destroyGroup = scope.$watchGroup([
+				function(scope) { return scope.aValue; },
+				function(scope) { return scope.anotherValue; }
+			], function(newValues, oldValues, scope){
+				counter ++;
+			});
+			scope.$digest();
+
+			scope.anotherValue = 3;
+			destroyGroup();
+			scope.$digest();
+			expect(counter).toBe(1);
+
+		});
+
+		it("does not call the zero-watch listen when deregistered first", function(){
+			var counter = 0;
+
+			var destroyGroup = scope.$watchGroup([], function(newValues, oldValues, scope){
+				counter ++;
+			});
+			destroyGroup();
+			scope.$digest();
+
+			expect(counter).toEqual(0);
+
+		});
+	});
+
+	describe('inheritance', function(){
+		it("inherits the parent's properties", function() {
+			var parent = new Scope();
+			parent.aValue = [1, 2, 3];
+
+			var child = parent.$new();
+
+			expect(child.aValue).toEqual([1, 2, 3]);
+		});
+
+		it("does not cause a parent to inherit its properties", function() {
+			var parent = new Scope();
+
+			var child = parent.$new();
+			child.aValue = [1, 2, 3];
+
+			expect(parent.aValue).toBeUndefined();
+		});
+
+		it("inherits the parent's properties whenever they are defined", function(){
+			var parent = new Scope();
+			var child = parent.$new();
+
+			parent.aValue = [1, 2, 3];
+
+			expect(child.aValue).toEqual([1, 2, 3]);
+		});
+
+		it("can manipulate a parent scope's property", function(){
+			var parent = new Scope();
+			var child = parent.$new();
+			parent.aValue = [1, 2, 3];
+
+			child.aValue.push(4);
+			expect(child.aValue).toEqual([1, 2, 3, 4]);
+			expect(parent.aValue).toEqual([1, 2, 3, 4]);
+		});
+
+		it("can watch a property in the parent", function(){
+			var parent = new Scope();
+			var child = parent.$new();
+			parent.aValue = [1, 2, 3];
+			child.counter = 0;
+
+			child.$watch(
+				function(scope) { return scope.aValue;},
+				function(newValue, oldValue, scope){
+					scope.counter ++;
+				},
+				true
+			);
+
+			child.$digest();
+			expect(child.counter).toBe(1);
+
+			parent.aValue.push(4);
+			child.$digest();
+			expect(child.counter).toBe(2);
+		});
+
+		it("can be nested at any depth", function(){
+			var a = new Scope();
+			var aa = a.$new();
+			var aaa = aa.$new();
+			var aab = aa.$new();
+			var ab = a.$new();
+			var abb = ab.$new();
+
+			a.value = 1;
+
+			expect(aa.value).toBe(1);
+			expect(aaa.value).toBe(1);
+			expect(aab.value).toBe(1);
+			expect(ab.value).toBe(1);
+			expect(abb.value).toBe(1);
+
+			ab.anotherValue = 2;
+			expect(abb.anotherValue).toBe(2);
+			expect(aa.anotherValue).toBeUndefined();
+			expect(aaa.anotherValue).toBeUndefined();
+		});
+
+		it("shadows a parent's property with the same name", function(){
+			var parent = new Scope();
+			var child = parent.$new();
+
+			parent.name = 'Joe';
+			child.name = 'Jill';
+
+			expect(parent.name).toBe("Joe");
+			expect(child.name).toBe("Jill");
+		});
+
+		it("dose not shadow members of parent scope's attributes", function(){
+
+			var parent = new Scope();
+			var child  = parent.$new();
+
+			parent.user = {name: 'Joe'};
+			child.user.name = 'Jill';
+
+			expect(child.user.name).toBe('Jill');
+			expect(parent.user.name).toBe('Jill');
+		});
+	});
+
 });
