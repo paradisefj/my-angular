@@ -1,4 +1,5 @@
-// "use strict";
+/* jshint globalstrict: true */
+'use strict';
 
 function Scope(){
 	this.$$watchers = [];
@@ -10,6 +11,7 @@ function Scope(){
 	this.$$children = [];
 	this.$root = this;
 	this.$$phase = null;
+	this.$$listeners = {};
 }
 
 function initWatchVal() { }
@@ -243,6 +245,7 @@ Scope.prototype.$new = function(isolated, parent){
 	parent.$$children.push(child);
 	child.$parent = parent;
 	child.$$watchers = [];
+	child.$$listeners = {};
 	child.$$children = [];
 	return child;
 };
@@ -266,4 +269,113 @@ Scope.prototype.$destroy = function(){
 		}
 	}
 	this.$$watchers = null;
+};
+
+Scope.prototype.$watchCollection = function(watchFn, listenerFn){
+	var self = this;
+	var newValue, oldValue;
+	var changeCount = 0;
+	var oldlength;
+	var veryOldValue;
+	var trackVeryOldValue = (listenerFn.length) > 1;
+	var firstRun = true;
+
+	var internalWatchFn = function(scope){
+		var newlength;
+		newValue = watchFn(scope);
+
+		if(_.isObject(newValue)){
+			if(_.isArrayLike(newValue)){
+				if(!_.isArray(oldValue)){
+					changeCount ++;
+					oldValue = [];
+				}
+				if(newValue.length !== oldValue.length){
+					changeCount ++;
+					oldValue.length = newValue.length;
+				}
+				_.forEach(newValue, function(newItem, i){
+					var bothNaN = _.isNaN(newItem) && _.isNaN(oldValue[i]);
+					if(!bothNaN && newItem !== oldValue[i]){
+						changeCount ++;
+						oldValue[i] = newItem;
+					}
+				});
+			} else {
+				if(!_.isObject(oldValue) || _.isArrayLike(oldValue)){
+					changeCount ++;
+					oldValue = {};
+					oldlength = 0;
+				}
+				newlength = 0;
+				_.forOwn(newValue, function(newVal, key){
+					newlength ++;
+					if(oldValue.hasOwnProperty(key)){
+						var bothNaN = _.isNaN(newVal) && _.isNaN(oldValue[key]);
+						if(!bothNaN && oldValue[key] !== newVal){
+							changeCount ++;
+							oldValue[key] = newVal;
+						}
+					}else {
+						changeCount ++;
+						oldlength ++;
+						oldValue[key] = newVal;
+					}
+				});
+				if(oldlength > newlength){
+					changeCount ++;
+					_.forOwn(oldValue, function(oldVal, key){
+						if(!newValue.hasOwnProperty(key)){
+							oldlength --;
+							delete oldValue[key];
+						}
+					});
+				}
+			}
+		} else{
+			if(!self.$$areEqual(newValue, oldValue, false)){
+				changeCount ++;
+			}
+			oldValue = newValue;
+		}
+
+		return changeCount;
+	};
+
+	var internalListernerFn = function(){
+		if(firstRun){
+			listenerFn(newValue, newValue, self);
+			firstRun = false;
+		}else{
+			listenerFn(newValue, veryOldValue, self);
+		}
+
+		if(trackVeryOldValue){
+			veryOldValue = _.clone(newValue);
+		}
+	};
+
+	return this.$watch(internalWatchFn, internalListernerFn);
+};
+
+Scope.prototype.$on = function(eventName, listener) {
+	var listeners = this.$$listeners[eventName];
+	if(!listeners){
+		this.$$listeners[eventName] = listeners = [];
+	}
+	listeners.push(listener);
+};
+
+Scope.prototype.$emit = function(eventName) {
+	var listeners = this.$$listeners[eventName];
+	_.forEach(listeners, function(listener){
+		listener();
+	});
+};
+
+Scope.prototype.$broadcast = function(eventName) {
+	var listeners = this.$$listeners[eventName];
+	_.forEach(listeners, function(listener) {
+		listener();
+	});
 };
