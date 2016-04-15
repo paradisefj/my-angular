@@ -364,18 +364,49 @@ Scope.prototype.$on = function(eventName, listener) {
 		this.$$listeners[eventName] = listeners = [];
 	}
 	listeners.push(listener);
+	return function(){
+		var index = listeners.indexOf(listener);
+		if (index >= 0) {
+			listeners[index] = null;
+		}
+	};
 };
 
 Scope.prototype.$emit = function(eventName) {
-	var listeners = this.$$listeners[eventName];
-	_.forEach(listeners, function(listener){
-		listener();
-	});
+	var event = { name: eventName, targetScope: this };
+	var listenerArgs = [event].concat(_.tail(arguments));
+	var scope = this;
+	do {
+		event.currentScope = scope;
+		scope.$$fireEventOnScope(eventName, listenerArgs);
+		scope = scope.$parent;
+	}while(scope);
+	event.currentScope = null;
+	return event;
 };
 
 Scope.prototype.$broadcast = function(eventName) {
-	var listeners = this.$$listeners[eventName];
-	_.forEach(listeners, function(listener) {
-		listener();
+	var event = { name: eventName, targetScope: this };
+	var listenerArgs = [event].concat(_.tail(arguments));
+	this.$$everyScope(function(scope) {
+		event.currentScope = scope;
+		scope.$$fireEventOnScope(eventName, listenerArgs);
+		return true;
 	});
+	event.currentScope = null;
+	return event;
+};
+
+Scope.prototype.$$fireEventOnScope = function(eventName, listenerArgs){
+	var listeners = this.$$listeners[eventName] || [];
+	var i = 0;
+	while(i < listeners.length){
+		if(listeners[i] === null){
+			listeners.splice(i, 1);
+		}else{
+			listeners[i].apply(null, listenerArgs);
+			i++;
+		}
+	}
+	return event;
 };
