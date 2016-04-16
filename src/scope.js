@@ -261,6 +261,7 @@ Scope.prototype.$$everyScope = function(fn){
 };
 
 Scope.prototype.$destroy = function(){
+	this.$broadcast('$destroy');
 	if(this.$parent){
 		var siblings = this.$parent.$$children;
 		var indexOfThis = siblings.indexOf(this);
@@ -269,6 +270,7 @@ Scope.prototype.$destroy = function(){
 		}
 	}
 	this.$$watchers = null;
+	this.$$listeners = {};
 };
 
 Scope.prototype.$watchCollection = function(watchFn, listenerFn){
@@ -373,20 +375,36 @@ Scope.prototype.$on = function(eventName, listener) {
 };
 
 Scope.prototype.$emit = function(eventName) {
-	var event = { name: eventName, targetScope: this };
+	var propagationStopped = false;
+	var event = { 
+		name: eventName,
+		targetScope: this,
+		stopPropagation: function(){
+			propagationStopped = true;
+		},
+		preventDefault: function(){
+			event.defaultPrevented = true;
+		}
+	};
 	var listenerArgs = [event].concat(_.tail(arguments));
 	var scope = this;
 	do {
 		event.currentScope = scope;
 		scope.$$fireEventOnScope(eventName, listenerArgs);
 		scope = scope.$parent;
-	}while(scope);
+	}while(scope && !propagationStopped);
 	event.currentScope = null;
 	return event;
 };
 
 Scope.prototype.$broadcast = function(eventName) {
-	var event = { name: eventName, targetScope: this };
+	var event = { 
+		name: eventName, 
+		targetScope: this,
+		preventDefault: function(){
+			event.defaultPrevented = true;
+		}
+	};
 	var listenerArgs = [event].concat(_.tail(arguments));
 	this.$$everyScope(function(scope) {
 		event.currentScope = scope;
@@ -404,7 +422,11 @@ Scope.prototype.$$fireEventOnScope = function(eventName, listenerArgs){
 		if(listeners[i] === null){
 			listeners.splice(i, 1);
 		}else{
-			listeners[i].apply(null, listenerArgs);
+			try {
+				listeners[i].apply(null, listenerArgs);
+			} catch (e) {
+				console.error(e);
+			}
 			i++;
 		}
 	}
