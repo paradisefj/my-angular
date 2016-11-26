@@ -73,9 +73,31 @@ describe('parse', function() {
 		expect(fn()).toEqual('a\"b');
 	});
 
-	
+	it('will parse a string with unicode escapes', function() {
+		var fn = parse('"\\u00A0"');
+		expect(fn()).toEqual('\u00A0');
+	});
 
+	it('will not parse a string with invalid unicode escapes', function() {
+		expect(function() {
+			parse('"\\u00T0"');
+		}).toThrow();
+	});
 
+	it('will parse null', function() {
+		var fn = parse('null');
+		expect(fn()).toBe(null);
+	});
+
+	it('will parse true', function() {
+		var fn = parse('true');
+		expect(fn()).toBe(true);
+	});
+
+	it('will parse false', function() {
+		var fn = parse('false');
+		expect(fn()).toBe(false);
+	});
 
 
 
