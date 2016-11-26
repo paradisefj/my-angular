@@ -37,8 +37,15 @@ Lexer.prototype.lex = function(text) {
 			this.readNumber();
 		} else if(this.ch === '\'' || this.ch === '"'){
 			this.readString(this.ch);
+		} else if(this.ch === '[' || this.ch === ']') {
+			this.tokens.push({
+				text: this.ch
+			});
+			this.index++;
 		} else if(this.isIdent(this.ch)) {
 			this.readIdent();
+		} else if(this.isWhitespace(this.ch)) {
+			this.index++;
 		} else {
 			throw 'Unexpected next character:' + this.ch;
 		}
@@ -150,6 +157,11 @@ Lexer.prototype.isIdent = function(ch) {
 		ch === '_' || ch === '$';
 };
 
+Lexer.prototype.isWhitespace = function(ch) {
+	return ch === ' ' || ch === '\r' || ch === '\t' ||
+		ch === '\n' || ch === '\v' || ch === '\u00A0';
+};
+
 
 function AST(lexer) {
 	this.lexer = lexer; 
@@ -168,7 +180,9 @@ AST.prototype.program = function(){
 };
 
 AST.prototype.primary = function() {
-	if(this.constants.hasOwnProperty(this.tokens[0].text)) {
+	if (this.expect('[')) {
+		return this.arrayDeclaration();
+	} else if(this.constants.hasOwnProperty(this.tokens[0].text)) {
 		return this.constants[this.tokens[0].text];
 	} else {
 		return this.constant();
